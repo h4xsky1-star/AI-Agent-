@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI Marketing Agent V5.2</title>
+<style>
+:root{font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;color:#172033;background:#f0f3f9}
+*{box-sizing:border-box}body{margin:0}.wrap{max-width:1100px;margin:auto;padding:24px 16px 56px}
+.hero{background:linear-gradient(135deg,#0f172a,#1e3a5f 55%,#243b64);color:#fff;border-radius:24px;padding:32px 24px;box-shadow:0 18px 50px #0b122228}
+.badge{display:inline-flex;align-items:center;gap:8px;background:#ffffff18;border:1px solid #ffffff30;padding:6px 12px;border-radius:999px;font-size:12px;font-weight:600}
+.dot{width:8px;height:8px;border-radius:50%;background:#94a3b8}.dot.on{background:#34d399;box-shadow:0 0 0 3px #34d39944}
+h1{font-size:clamp(28px,6vw,48px);line-height:1.08;margin:16px 0 10px}.sub{color:#c9d7ef;max-width:720px;line-height:1.5}
+.tabs{display:flex;gap:8px;margin-top:20px;flex-wrap:wrap}
+.tab{background:#ffffff14;border:1px solid #ffffff28;color:#fff;padding:10px 16px;border-radius:12px;cursor:pointer;font-weight:700}
+.tab.active{background:#fff;color:#0f172a}
+.panel{margin-top:14px}.panel.hidden{display:none}
+.search{display:flex;gap:10px;flex-wrap:wrap}.search input[type=url],.search input[type=file]{flex:1;min-width:200px;padding:14px 16px;border:0;border-radius:12px;font-size:15px}
+.btn{border:0;border-radius:12px;padding:14px 18px;font-weight:800;cursor:pointer}
+.primary{background:#fff;color:#0f172a}.approve{background:#0f172a;color:#fff}.danger{background:#fef2f2;color:#b91c1c}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-top:16px}
+.card{background:#fff;border:1px solid #e2e8f0;border-radius:18px;padding:18px;box-shadow:0 8px 24px #1720330a}
+.card h2{margin:0 0 10px;font-size:18px}.muted{color:#64748b;font-size:14px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}.chip{background:#eef2ff;padding:6px 10px;border-radius:999px;font-size:12px}
+textarea,input[type=text]{width:100%;border:1px solid #d8dee9;border-radius:10px;padding:11px;font:inherit;min-height:88px}
+input[type=text]{min-height:auto}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.status{margin-top:14px;font-weight:700;min-height:1.4em}.hidden{display:none}
+footer{margin-top:28px;text-align:center;color:#64748b;font-size:13px}
+.history-item{border-bottom:1px solid #eef2f7;padding:10px 0;font-size:14px}
+.mode-banner{margin-top:12px;padding:10px 14px;border-radius:12px;font-size:13px;font-weight:600}
+.mode-banner.demo{background:#fef3c7;color:#92400e}.mode-banner.ai{background:#d1fae5;color:#065f46}
+</style>
+</head>
+<body>
+<div class="wrap">
+<section class="hero">
+<span class="badge"><span id="aiDot" class="dot"></span> <span id="aiBadgeText">Checking AI…</span></span>
+<h1>Real AI Marketing Agent</h1>
+<p class="sub">Paste a public product/site link or upload an image. The agent analyzes content, builds strategy, and writes platform drafts. Nothing posts until you approve.</p>
+
+<div class="tabs">
+  <button class="tab active" data-tab="link" type="button">Link</button>
+  <button class="tab" data-tab="image" type="button">Image</button>
+</div>
+
+<div id="panel-link" class="panel">
+  <div class="search">
+    <input id="url" type="url" placeholder="https://example.com/product" autocomplete="url">
+    <button class="btn primary" type="button" onclick="analyzeUrl()">Analyze with AI</button>
+  </div>
+</div>
+<div id="panel-image" class="panel hidden">
+  <div class="search">
+    <input id="image" type="file" accept="image/*">
+    <button class="btn primary" type="button" onclick="analyzeImage()">Analyze image</button>
+  </div>
+</div>
+
+<div id="modeBanner" class="mode-banner demo hidden"></div>
+<div id="status" class="status"></div>
+</section>
+
+<section id="results" class="hidden">
+<div class="grid">
+  <div class="card">
+    <h2>Strategy</h2>
+    <p id="summary"></p>
+    <p><b>Audience:</b> <span id="audience"></span></p>
+    <p><b>Goal:</b> <span id="goal"></span></p>
+    <ul id="strategy"></ul>
+  </div>
+  <div class="card">
+    <h2>Approval</h2>
+    <p class="muted">Edit drafts below, then approve. Social publish needs separate API tokens later.</p>
+    <div class="row">
+      <button class="btn approve" type="button" onclick="approveAll()">Approve all</button>
+      <button class="btn danger" type="button" onclick="clearResults()">Clear</button>
+    </div>
+    <p id="approvalStatus" class="muted"></p>
+  </div>
+</div>
+<div id="drafts" class="grid"></div>
+</section>
+
+<section class="card" style="margin-top:20px">
+  <h2>Post History</h2>
+  <div id="historyList" class="muted">No history yet.</div>
+</section>
+
+<footer>Made With Asikur Rahman Opu</footer>
+</div>
+
+<script>
+let current = null;
+
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[c]));
+}
+
+document.querySelectorAll(".tab").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById("panel-link").classList.toggle("hidden", btn.dataset.tab !== "link");
+    document.getElementById("panel-image").classList.toggle("hidden", btn.dataset.tab !== "image");
+  });
+});
+
+async function checkHealth() {
+  try {
+    const r = await fetch("/api/health");
+    const d = await r.json();
+    const dot = document.getElementById("aiDot");
+    const badge = document.getElementById("aiBadgeText");
+    const banner = document.getElementById("modeBanner");
+    if (d.aiConfigured) {
+      dot.classList.add("on");
+      badge.textContent = "REAL AI CONNECTED · V5.2";
+      banner.className = "mode-banner ai";
+      banner.textContent = "Real AI mode: page content is fetched and sent to your AI provider.";
+      banner.classList.remove("hidden");
+    } else {
+      dot.classList.remove("on");
+      badge.textContent = "DEMO MODE · add API keys";
+      banner.className = "mode-banner demo";
+      banner.textContent = "Demo mode. Set AI_API_KEY, AI_API_URL, AI_MODEL (e.g. Groq) for real agent.";
+      banner.classList.remove("hidden");
+    }
+  } catch {
+    document.getElementById("aiBadgeText").textContent = "Server offline";
+  }
+}
+
+async function analyzeUrl() {
+  const input = document.getElementById("url");
+  const status = document.getElementById("status");
+  status.textContent = "Fetching page + running AI…";
+  document.getElementById("results").classList.add("hidden");
+  try {
+    const r = await fetch("/api/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: input.value.trim() })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || "Failed");
+    current = d.result;
+    render(current);
+    status.textContent = d.mode === "ai" ? "Real AI analysis complete." : "Demo output (no AI key).";
+    loadHistory();
+  } catch (e) {
+    status.textContent = "Error: " + e.message;
+  }
+}
+
+async function analyzeImage() {
+  const fileInput = document.getElementById("image");
+  const status = document.getElementById("status");
+  if (!fileInput.files[0]) {
+    status.textContent = "Choose an image first.";
+    return;
+  }
+  status.textContent = "Analyzing image with AI…";
+  document.getElementById("results").classList.add("hidden");
+  const form = new FormData();
+  form.append("image", fileInput.files[0]);
+  try {
+    const r = await fetch("/api/analyze-image", { method: "POST", body: form });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || "Failed");
+    current = d.result;
+    render(current);
+    status.textContent = d.mode === "ai" ? "Real AI image analysis complete." : "Demo output (no AI key / vision model).";
+    loadHistory();
+  } catch (e) {
+    status.textContent = "Error: " + e.message;
+  }
+}
+
+function render(x) {
+  document.getElementById("results").classList.remove("hidden");
+  document.getElementById("summary").textContent = x.summary || "";
+  document.getElementById("audience").textContent = x.audience || "";
+  document.getElementById("goal").textContent = x.goal || "";
+  document.getElementById("strategy").innerHTML = (x.strategy || []).map(v => `<li>${esc(v)}</li>`).join("");
+
+  const f = x.drafts?.facebook || {};
+  const ig = x.drafts?.instagram || {};
+  const tt = x.drafts?.tiktok || {};
+  const r = x.drafts?.reddit || {};
+  const p = x.drafts?.pinterest || {};
+
+  document.getElementById("drafts").innerHTML = `
+  <div class="card draftCard"><h2>Facebook</h2>
+    <p><b>Hooks</b></p><ul>${(f.hooks || []).map(v => `<li>${esc(v)}</li>`).join("")}</ul>
+    <p><b>Caption</b></p><textarea>${esc(f.caption)}</textarea>
+    <p><b>CTA:</b> ${esc(f.cta)}</p>
+    <div class="chips">${(f.hashtags || []).map(v => `<span class="chip">${esc(v)}</span>`).join("")}</div>
+    <button class="btn approve" type="button" onclick="markApproved(this)">Approve</button></div>
+  <div class="card draftCard"><h2>Instagram</h2>
+    <p><b>Caption</b></p><textarea>${esc(ig.caption)}</textarea>
+    <div class="chips">${(ig.hashtags || []).map(v => `<span class="chip">${esc(v)}</span>`).join("")}</div>
+    <button class="btn approve" type="button" onclick="markApproved(this)">Approve</button></div>
+  <div class="card draftCard"><h2>TikTok</h2>
+    <p><b>Caption</b></p><textarea>${esc(tt.caption)}</textarea>
+    <div class="chips">${(tt.hashtags || []).map(v => `<span class="chip">${esc(v)}</span>`).join("")}</div>
+    <button class="btn approve" type="button" onclick="markApproved(this)">Approve</button></div>
+  <div class="card draftCard"><h2>Reddit</h2>
+    <p><b>Title</b></p><input type="text" value="${esc(r.title)}">
+    <p><b>Body</b></p><textarea>${esc(r.body)}</textarea>
+    <p class="muted">${esc(r.note)}</p>
+    <button class="btn approve" type="button" onclick="markApproved(this)">Approve</button></div>
+  <div class="card draftCard"><h2>Pinterest</h2>
+    <p><b>Title</b></p><input type="text" value="${esc(p.title)}">
+    <p><b>Description</b></p><textarea>${esc(p.description)}</textarea>
+    <div class="chips">${(p.keywords || []).map(v => `<span class="chip">${esc(v)}</span>`).join("")}</div>
+    <button class="btn approve" type="button" onclick="markApproved(this)">Approve</button></div>`;
+}
+
+function markApproved(btn) {
+  btn.textContent = "Approved ✓";
+  btn.disabled = true;
+  btn.style.opacity = ".65";
+}
+
+function approveAll() {
+  document.querySelectorAll(".draftCard .approve").forEach(b => {
+    if (!b.disabled) markApproved(b);
+  });
+  document.getElementById("approvalStatus").textContent =
+    "All drafts approved locally. No social post published (tokens not set).";
+  if (current?.id) {
+    fetch("/api/approve/" + current.id, { method: "POST" }).catch(() => {});
+  }
+}
+
+function clearResults() {
+  document.getElementById("results").classList.add("hidden");
+  current = null;
+  document.getElementById("approvalStatus").textContent = "";
+}
+
+async function loadHistory() {
+  try {
+    const r = await fetch("/api/history");
+    const d = await r.json();
+    const list = document.getElementById("historyList");
+    if (!d.history?.length) {
+      list.textContent = "No history yet.";
+      return;
+    }
+    list.innerHTML = d.history
+      .map(
+        h =>
+          `<div class="history-item"><b>${esc(h.brand || "Campaign")}</b> · ${esc(h.source)} · ${esc(h.status)} · ${esc(h.mode || "")} · ${new Date(h.createdAt).toLocaleString()}</div>`
+      )
+      .join("");
+  } catch {}
+}
+
+checkHealth();
+loadHistory();
+</script>
+</body>
+</html>
